@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" fill="none">
+  <circle cx="20" cy="20" r="18" fill="url(#coinGrad)" stroke="url(#coinStroke)" stroke-width="1.5"/>
+  <circle cx="20" cy="20" r="14" fill="url(#innerGrad)" opacity="0.6"/>
+  <text x="20" y="26" font-family="system-ui, sans-serif" font-size="16" font-weight="900" text-anchor="middle" fill="url(#textGrad)">⚡</text>
+  <defs>
+    <radialGradient id="coinGrad" cx="35%" cy="25%" r="70%">
+      <stop offset="0%" stop-color="#ff8c42"/>
+      <stop offset="60%" stop-color="#ff5722"/>
+      <stop offset="100%" stop-color="#c4390f"/>
+    </radialGradient>
+    <linearGradient id="coinStroke" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ffb347"/>
+      <stop offset="100%" stop-color="#e64a19"/>
+    </linearGradient>
+    <radialGradient id="innerGrad" cx="40%" cy="30%" r="60%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="textGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fff8e1"/>
+      <stop offset="100%" stop-color="#ffe082"/>
+    </linearGradient>
+  </defs>
+</svg>

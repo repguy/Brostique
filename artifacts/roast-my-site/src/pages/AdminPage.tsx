@@ -22,9 +22,13 @@ interface AdminStats {
 interface AdminSettings {
   openrouter_model: string;
   polar_product_id: string;
+  polar_product_id_credits_10: string;
+  polar_product_id_credits_25: string;
+  polar_product_id_credits_100: string;
   ai_provider: string;
   has_openrouter_key: boolean;
   has_polar_key: boolean;
+  has_polar_webhook_secret: boolean;
   admin_clerk_id_configured: boolean;
 }
 
@@ -92,7 +96,7 @@ export default function AdminPage() {
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [settings, setSettings] = useState<AdminSettings | null>(null);
   const [users, setUsers] = useState<AdminUser[]>([]);
-  const [form, setForm] = useState({ openrouter_model: "", polar_product_id: "", ai_provider: "openai" });
+  const [form, setForm] = useState({ openrouter_model: "", polar_product_id: "", polar_product_id_credits_10: "", polar_product_id_credits_25: "", polar_product_id_credits_100: "", ai_provider: "openai" });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -122,6 +126,9 @@ export default function AdminPage() {
       setForm({
         openrouter_model: cfg.openrouter_model,
         polar_product_id: cfg.polar_product_id,
+        polar_product_id_credits_10: cfg.polar_product_id_credits_10,
+        polar_product_id_credits_25: cfg.polar_product_id_credits_25,
+        polar_product_id_credits_100: cfg.polar_product_id_credits_100,
         ai_provider: cfg.ai_provider,
       });
     } catch (e) {
@@ -529,11 +536,11 @@ export default function AdminPage() {
                   <CardTitle className="text-sm font-bold flex items-center gap-2">
                     <Package className="w-4 h-4 text-primary" /> Polar Payments
                   </CardTitle>
-                  <CardDescription className="text-xs">Configure your Polar product for the Pro plan.</CardDescription>
+                  <CardDescription className="text-xs">Configure Polar product IDs for Pro plan and credit packs.</CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-5">
+                <CardContent className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="polar_product_id" className="text-xs">Pro Product ID</Label>
+                    <Label htmlFor="polar_product_id" className="text-xs font-semibold">Pro Subscription Product ID</Label>
                     <Input
                       id="polar_product_id"
                       placeholder="e.g. prod_xxxxxxxx"
@@ -542,9 +549,30 @@ export default function AdminPage() {
                       className="font-mono text-xs"
                     />
                   </div>
+                  <div className="pt-2 border-t border-border/60">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-3">Credit Pack Product IDs</p>
+                    <div className="space-y-2.5">
+                      {[
+                        { key: "polar_product_id_credits_10" as const, label: "Starter Pack (10 credits)", placeholder: "prod_credits10" },
+                        { key: "polar_product_id_credits_25" as const, label: "Growth Pack (25 credits)", placeholder: "prod_credits25" },
+                        { key: "polar_product_id_credits_100" as const, label: "Scale Pack (100 credits)", placeholder: "prod_credits100" },
+                      ].map(({ key, label, placeholder }) => (
+                        <div key={key} className="space-y-1">
+                          <Label className="text-[10px] text-muted-foreground">{label}</Label>
+                          <Input
+                            placeholder={placeholder}
+                            value={form[key]}
+                            onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
+                            className="font-mono text-xs h-8"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                   <div className="pt-3 border-t border-border space-y-1">
                     <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">Secret Status</p>
                     <StatusRow label="POLAR_ACCESS_TOKEN" ok={settings?.has_polar_key ?? false} />
+                    <StatusRow label="POLAR_WEBHOOK_SECRET" ok={settings?.has_polar_webhook_secret ?? false} />
                     <StatusRow label="ADMIN_CLERK_ID" ok={settings?.admin_clerk_id_configured ?? false} />
                   </div>
                 </CardContent>
@@ -572,7 +600,8 @@ export default function AdminPage() {
                     { label: "Database connected", ok: true },
                     { label: "OpenRouter API key set", ok: settings?.has_openrouter_key ?? false },
                     { label: "Polar access token set", ok: settings?.has_polar_key ?? false },
-                    { label: "Polar product ID set", ok: !!(settings?.polar_product_id) },
+                    { label: "Polar webhook secret set", ok: settings?.has_polar_webhook_secret ?? false },
+                    { label: "Polar Pro product ID set", ok: !!(settings?.polar_product_id) },
                     { label: "Admin Clerk ID set", ok: settings?.admin_clerk_id_configured ?? false },
                   ].map(item => (
                     <div key={item.label} className="flex items-center gap-2 text-xs">

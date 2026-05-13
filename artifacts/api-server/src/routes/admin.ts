@@ -115,7 +115,6 @@ router.post("/admin/users/:clerkId/credits", requireAdmin, async (req, res): Pro
     .where(eq(usersTable.clerkId, clerkId));
 
   if (!user) {
-    // Try to find by partial match (email search isn't available but at least give helpful error)
     res.status(404).json({ error: `User with clerkId '${clerkId}' not found. Make sure the user has signed in at least once.` });
     return;
   }
@@ -133,22 +132,57 @@ router.post("/admin/users/:clerkId/credits", requireAdmin, async (req, res): Pro
   });
 });
 
+// PATCH /admin/users/:clerkId/pro — toggle Pro status
+router.patch("/admin/users/:clerkId/pro", requireAdmin, async (req, res): Promise<void> => {
+  const { clerkId } = req.params;
+  const { isPro } = req.body as { isPro: boolean };
+
+  if (typeof isPro !== "boolean") {
+    res.status(400).json({ error: "isPro must be a boolean" });
+    return;
+  }
+
+  const [updated] = await db
+    .update(usersTable)
+    .set({ isPro })
+    .where(eq(usersTable.clerkId, clerkId))
+    .returning();
+
+  if (!updated) {
+    res.status(404).json({ error: "User not found" });
+    return;
+  }
+
+  res.json({ clerkId: updated.clerkId, isPro: updated.isPro });
+});
+
 // GET /admin/settings
 router.get("/admin/settings", requireAdmin, async (_req, res): Promise<void> => {
   const settings = await getAllSettings();
   res.json({
     openrouter_model: settings.openrouter_model ?? "",
     polar_product_id: settings.polar_product_id ?? "",
+    polar_product_id_credits_10: settings.polar_product_id_credits_10 ?? "",
+    polar_product_id_credits_25: settings.polar_product_id_credits_25 ?? "",
+    polar_product_id_credits_100: settings.polar_product_id_credits_100 ?? "",
     ai_provider: settings.ai_provider ?? "openai",
     has_openrouter_key: !!process.env.OPENROUTER_API_KEY,
     has_polar_key: !!process.env.POLAR_ACCESS_TOKEN,
+    has_polar_webhook_secret: !!process.env.POLAR_WEBHOOK_SECRET,
     admin_clerk_id_configured: !!process.env.ADMIN_CLERK_ID,
   });
 });
 
 // PUT /admin/settings
 router.put("/admin/settings", requireAdmin, async (req, res): Promise<void> => {
-  const allowed = ["openrouter_model", "polar_product_id", "ai_provider"];
+  const allowed = [
+    "openrouter_model",
+    "polar_product_id",
+    "polar_product_id_credits_10",
+    "polar_product_id_credits_25",
+    "polar_product_id_credits_100",
+    "ai_provider",
+  ];
   const updates = req.body as Record<string, string>;
 
   const errors: string[] = [];
@@ -173,9 +207,13 @@ router.put("/admin/settings", requireAdmin, async (req, res): Promise<void> => {
   res.json({
     openrouter_model: settings.openrouter_model ?? "",
     polar_product_id: settings.polar_product_id ?? "",
+    polar_product_id_credits_10: settings.polar_product_id_credits_10 ?? "",
+    polar_product_id_credits_25: settings.polar_product_id_credits_25 ?? "",
+    polar_product_id_credits_100: settings.polar_product_id_credits_100 ?? "",
     ai_provider: settings.ai_provider ?? "openai",
     has_openrouter_key: !!process.env.OPENROUTER_API_KEY,
     has_polar_key: !!process.env.POLAR_ACCESS_TOKEN,
+    has_polar_webhook_secret: !!process.env.POLAR_WEBHOOK_SECRET,
     admin_clerk_id_configured: !!process.env.ADMIN_CLERK_ID,
   });
 });

@@ -31,7 +31,6 @@ router.get("/admin/stats", requireAdmin, async (_req, res): Promise<void> => {
     db.select({ count: count() }).from(reportsTable).where(
       eq(reportsTable.status, "completed")
     ),
-    // Daily report counts for the past 7 days
     db.execute(sql`
       SELECT 
         date_trunc('day', created_at AT TIME ZONE 'UTC') AS day,
@@ -41,7 +40,6 @@ router.get("/admin/stats", requireAdmin, async (_req, res): Promise<void> => {
       GROUP BY 1
       ORDER BY 1 ASC
     `),
-    // Top 10 most analyzed URLs
     db.execute(sql`
       SELECT url, COUNT(*)::int AS roast_count
       FROM reports
@@ -79,10 +77,65 @@ router.get("/admin/stats", requireAdmin, async (_req, res): Promise<void> => {
   });
 });
 
+// GET /admin/users
+router.get("/admin/users", requireAdmin, async (req, res): Promise<void> => {
+  const limit = parseInt(String(req.query.limit ?? "50"), 10);
+  const offset = parseInt(String(req.query.offset ?? "0"), 10);
+
+  const users = await db
+    .select()
+    .from(usersTable)
+    .orderBy(desc(usersTable.createdAt))
+    .limit(limit)
+    .offset(offset);
+
+  res.json(users.map(u => ({
+    id: u.id,
+    clerkId: u.clerkId,
+    email: u.email,
+    isPro: u.isPro,
+    credits: u.credits,
+    createdAt: u.createdAt.toISOString(),
+  })));
+});
+
+// POST /admin/users/:clerkId/credits
+router.post("/admin/users/:clerkId/credits", requireAdmin, async (req, res): Promise<void> => {
+  const { clerkId } = req.params;
+  const { amount } = req.body as { amount: number; note?: string };
+
+  if (!amount || typeof amount !== "number" || amount < 1) {
+    res.status(400).json({ error: "amount must be a positive integer" });
+    return;
+  }
+
+  const [user] = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.clerkId, clerkId));
+
+  if (!user) {
+    // Try to find by partial match (email search isn't available but at least give helpful error)
+    res.status(404).json({ error: `User with clerkId '${clerkId}' not found. Make sure the user has signed in at least once.` });
+    return;
+  }
+
+  const [updated] = await db
+    .update(usersTable)
+    .set({ credits: sql`${usersTable.credits} + ${amount}` })
+    .where(eq(usersTable.clerkId, clerkId))
+    .returning();
+
+  res.json({
+    clerkId: updated.clerkId,
+    credits: updated.credits,
+    added: amount,
+  });
+});
+
 // GET /admin/settings
 router.get("/admin/settings", requireAdmin, async (_req, res): Promise<void> => {
   const settings = await getAllSettings();
-  // Never return the actual API keys — only meta-config
   res.json({
     openrouter_model: settings.openrouter_model ?? "",
     polar_product_id: settings.polar_product_id ?? "",

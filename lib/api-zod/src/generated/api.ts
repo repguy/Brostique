@@ -295,6 +295,7 @@ export const GetReportStatsResponse = zod.object({
   favoriteReports: zod.number(),
   avgScore: zod.number().nullable(),
   isPro: zod.boolean(),
+  credits: zod.number(),
 });
 
 /**
@@ -305,6 +306,7 @@ export const GetMeResponse = zod.object({
   clerkId: zod.string(),
   email: zod.string().nullish(),
   isPro: zod.boolean(),
+  credits: zod.number(),
   stripeCustomerId: zod.string().nullish(),
   stripeSubscriptionId: zod.string().nullish(),
   dailyRoastsUsed: zod.number(),
@@ -342,3 +344,42 @@ export const CreateCheckoutSessionResponse = zod.object({
 export const CreateBillingPortalSessionResponse = zod.object({
   url: zod.string(),
 });
+
+/**
+ * @summary Manually grant credits to a user (admin only)
+ */
+export const GrantCreditsParams = zod.object({
+  clerkId: zod.coerce.string(),
+});
+
+export const GrantCreditsBody = zod.object({
+  amount: zod.number().min(1),
+  note: zod.string().nullish(),
+});
+
+export const GrantCreditsResponse = zod.object({
+  clerkId: zod.string(),
+  credits: zod.number(),
+  added: zod.number(),
+});
+
+/**
+ * @summary List all users (admin only)
+ */
+export const listAdminUsersQueryLimitDefault = 50;
+export const listAdminUsersQueryOffsetDefault = 0;
+
+export const ListAdminUsersQueryParams = zod.object({
+  limit: zod.coerce.number().default(listAdminUsersQueryLimitDefault),
+  offset: zod.coerce.number().default(listAdminUsersQueryOffsetDefault),
+});
+
+export const ListAdminUsersResponseItem = zod.object({
+  id: zod.number(),
+  clerkId: zod.string(),
+  email: zod.string().nullish(),
+  isPro: zod.boolean(),
+  credits: zod.number(),
+  createdAt: zod.coerce.date(),
+});
+export const ListAdminUsersResponse = zod.array(ListAdminUsersResponseItem);

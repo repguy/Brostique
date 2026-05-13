@@ -16,6 +16,8 @@ tags:
     description: User management
   - name: billing
     description: Subscription and billing
+  - name: admin
+    description: Admin operations
 
 paths:
   /healthz:
@@ -82,7 +84,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "429":
-          description: Daily limit reached for free users
+          description: No credits remaining
           content:
             application/json:
               schema:
@@ -280,6 +282,63 @@ paths:
               schema:
                 $ref: "#/components/schemas/PortalSession"
 
+  /admin/users/{clerkId}/credits:
+    post:
+      operationId: grantCredits
+      tags: [admin]
+      summary: Manually grant credits to a user (admin only)
+      parameters:
+        - name: clerkId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GrantCreditsInput"
+      responses:
+        "200":
+          description: Updated user credits
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreditGrantResult"
+        "404":
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /admin/users:
+    get:
+      operationId: listAdminUsers
+      tags: [admin]
+      summary: List all users (admin only)
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: List of users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminUser"
+
 components:
   schemas:
     HealthStatus:
@@ -423,6 +482,7 @@ components:
         - favoriteReports
         - avgScore
         - isPro
+        - credits
       properties:
         totalReports:
           type: integer
@@ -436,6 +496,8 @@ components:
           type: ["number", "null"]
         isPro:
           type: boolean
+        credits:
+          type: integer
 
     User:
       type: object
@@ -443,6 +505,7 @@ components:
         - id
         - clerkId
         - isPro
+        - credits
         - dailyRoastsUsed
         - createdAt
       properties:
@@ -454,6 +517,8 @@ components:
           type: ["string", "null"]
         isPro:
           type: boolean
+        credits:
+          type: integer
         stripeCustomerId:
           type: ["string", "null"]
         stripeSubscriptionId:
@@ -514,3 +579,51 @@ components:
       properties:
         url:
           type: string
+
+    GrantCreditsInput:
+      type: object
+      required:
+        - amount
+      properties:
+        amount:
+          type: integer
+          minimum: 1
+        note:
+          type: ["string", "null"]
+
+    CreditGrantResult:
+      type: object
+      required:
+        - clerkId
+        - credits
+        - added
+      properties:
+        clerkId:
+          type: string
+        credits:
+          type: integer
+        added:
+          type: integer
+
+    AdminUser:
+      type: object
+      required:
+        - id
+        - clerkId
+        - isPro
+        - credits
+        - createdAt
+      properties:
+        id:
+          type: integer
+        clerkId:
+          type: string
+        email:
+          type: ["string", "null"]
+        isPro:
+          type: boolean
+        credits:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time

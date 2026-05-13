@@ -9,6 +9,7 @@ export const usersTable = pgTable("users", {
   isPro: boolean("is_pro").notNull().default(false),
   stripeCustomerId: text("stripe_customer_id"),
   stripeSubscriptionId: text("stripe_subscription_id"),
+  credits: integer("credits").notNull().default(3),
   dailyRoastsUsed: integer("daily_roasts_used").notNull().default(0),
   dailyRoastsResetAt: timestamp("daily_roasts_reset_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

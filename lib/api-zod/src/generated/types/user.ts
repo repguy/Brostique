@@ -12,6 +12,7 @@ export interface User {
   /** @nullable */
   email?: string | null;
   isPro: boolean;
+  credits: number;
   /** @nullable */
   stripeCustomerId?: string | null;
   /** @nullable */

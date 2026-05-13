@@ -107,6 +107,7 @@ export interface UserStats {
   /** @nullable */
   avgScore: number | null;
   isPro: boolean;
+  credits: number;
 }
 
 export interface User {
@@ -115,6 +116,7 @@ export interface User {
   /** @nullable */
   email?: string | null;
   isPro: boolean;
+  credits: number;
   /** @nullable */
   stripeCustomerId?: string | null;
   /** @nullable */
@@ -147,7 +149,35 @@ export interface PortalSession {
   url: string;
 }
 
+export interface GrantCreditsInput {
+  /** @minimum 1 */
+  amount: number;
+  /** @nullable */
+  note?: string | null;
+}
+
+export interface CreditGrantResult {
+  clerkId: string;
+  credits: number;
+  added: number;
+}
+
+export interface AdminUser {
+  id: number;
+  clerkId: string;
+  /** @nullable */
+  email?: string | null;
+  isPro: boolean;
+  credits: number;
+  createdAt: string;
+}
+
 export type ListReportsParams = {
+  limit?: number;
+  offset?: number;
+};
+
+export type ListAdminUsersParams = {
   limit?: number;
   offset?: number;
 };

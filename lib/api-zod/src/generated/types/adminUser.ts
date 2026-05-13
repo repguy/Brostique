@@ -6,13 +6,12 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface UserStats {
-  totalReports: number;
-  todayReports: number;
-  dailyLimit: number;
-  favoriteReports: number;
+export interface AdminUser {
+  id: number;
+  clerkId: string;
   /** @nullable */
-  avgScore: number | null;
+  email?: string | null;
   isPro: boolean;
   credits: number;
+  createdAt: Date;
 }

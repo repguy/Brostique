@@ -6,10 +6,14 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from "./adminUser";
 export * from "./apiError";
 export * from "./checkoutInput";
 export * from "./checkoutSession";
+export * from "./creditGrantResult";
+export * from "./grantCreditsInput";
 export * from "./healthStatus";
+export * from "./listAdminUsersParams";
 export * from "./listReportsParams";
 export * from "./plan";
 export * from "./portalSession";

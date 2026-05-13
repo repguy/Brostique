@@ -19,10 +19,9 @@ router.get("/users/me", requireAuth, async (req, res): Promise<void> => {
     .where(eq(usersTable.clerkId, clerkUserId));
 
   if (!user) {
-    // JIT provision user
     [user] = await db
       .insert(usersTable)
-      .values({ clerkId: clerkUserId })
+      .values({ clerkId: clerkUserId, credits: 3 })
       .returning();
   }
 
@@ -31,6 +30,7 @@ router.get("/users/me", requireAuth, async (req, res): Promise<void> => {
     clerkId: user.clerkId,
     email: user.email,
     isPro: user.isPro,
+    credits: user.credits,
     stripeCustomerId: user.stripeCustomerId,
     stripeSubscriptionId: user.stripeSubscriptionId,
     dailyRoastsUsed: user.dailyRoastsUsed,

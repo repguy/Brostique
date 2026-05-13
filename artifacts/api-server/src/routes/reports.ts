@@ -26,8 +26,6 @@ const router: IRouter = Router();
 
 type AuthedRequest = Request & { clerkUserId: string };
 
-const FREE_DAILY_LIMIT = 1;
-
 async function getOrCreateUser(clerkUserId: string) {
   let [user] = await db
     .select()
@@ -37,7 +35,7 @@ async function getOrCreateUser(clerkUserId: string) {
   if (!user) {
     [user] = await db
       .insert(usersTable)
-      .values({ clerkId: clerkUserId })
+      .values({ clerkId: clerkUserId, credits: 3 })
       .returning();
   }
   return user;
@@ -89,7 +87,7 @@ router.get("/reports/stats", requireAuth, async (req, res): Promise<void> => {
     ? completed.reduce((sum, r) => sum + (r.overallScore ?? 0), 0) / completed.length
     : null;
 
-  const dailyLimit = user.isPro ? 999 : FREE_DAILY_LIMIT;
+  const dailyLimit = user.isPro ? 999 : 3;
 
   res.json(GetReportStatsResponse.parse({
     totalReports: allReports.length,
@@ -98,6 +96,7 @@ router.get("/reports/stats", requireAuth, async (req, res): Promise<void> => {
     favoriteReports: favorites.length,
     avgScore: avgScore != null ? Math.round(avgScore * 10) / 10 : null,
     isPro: user.isPro,
+    credits: user.credits,
   }));
 });
 
@@ -156,22 +155,10 @@ router.post("/reports", requireAuth, async (req, res): Promise<void> => {
 
   const user = await getOrCreateUser(clerkUserId);
 
-  // Check daily limit for free users
-  if (!user.isPro) {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const [{ count }] = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(reportsTable)
-      .where(and(
-        eq(reportsTable.userId, clerkUserId),
-        sql`created_at >= ${today.toISOString()}`,
-      ));
-
-    if (count >= FREE_DAILY_LIMIT) {
-      res.status(429).json({ error: "Daily roast limit reached. Upgrade to Pro for unlimited roasts." });
-      return;
-    }
+  // Check credits
+  if (user.credits <= 0) {
+    res.status(429).json({ error: "No credits remaining. Purchase more credits to continue roasting." });
+    return;
   }
 
   // Validate URL
@@ -184,6 +171,14 @@ router.post("/reports", requireAuth, async (req, res): Promise<void> => {
     res.status(400).json({ error: "Invalid URL. Please provide a valid http or https URL." });
     return;
   }
+
+  // Deduct 1 credit atomically
+  await db.update(usersTable)
+    .set({ credits: sql`${usersTable.credits} - 1` })
+    .where(and(
+      eq(usersTable.clerkId, clerkUserId),
+      sql`${usersTable.credits} > 0`,
+    ));
 
   // Create the report record
   const [report] = await db

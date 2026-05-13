@@ -5,7 +5,8 @@ import { format } from "date-fns";
 import {
   Flame, LogOut, Settings, ExternalLink, Share2,
   Heart, Loader2, Search, ArrowRight, ShieldAlert, Zap, CreditCard,
-  TrendingUp, Star, CheckCircle2, Package, Sparkles, BarChart3, RefreshCw
+  TrendingUp, Star, CheckCircle2, Package, Sparkles, BarChart3, RefreshCw,
+  Gift, Copy, Trophy
 } from "lucide-react";
 import {
   useGetMe,
@@ -24,6 +25,8 @@ import { Badge } from "@/components/ui/badge";
 import URLInput from "@/components/URLInput";
 import { useToast } from "@/hooks/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
+
+const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 function scoreColor(score: number | null | undefined) {
   if (score == null) return "text-muted-foreground";
@@ -54,6 +57,12 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState("roasts");
   const [buyingPack, setBuyingPack] = useState<string | null>(null);
   const [creditPacks, setCreditPacks] = useState<CreditPack[]>([]);
+  const [referralData, setReferralData] = useState<{
+    referralCode: string; referralLink: string; referralCreditsEarned: number;
+    referredCount: number; creditsPerReferral: number;
+  } | null>(null);
+  const [referralCodeInput, setReferralCodeInput] = useState("");
+  const [applyingCode, setApplyingCode] = useState(false);
 
   const { data: user, refetch: refetchUser } = useGetMe();
   const { data: stats, refetch: refetchStats } = useGetReportStats();
@@ -69,9 +78,13 @@ export default function Dashboard() {
   const isPro = user?.isPro ?? false;
 
   useEffect(() => {
-    fetch("/api/billing/credit-packs")
+    fetch(`${API_BASE}/api/billing/credit-packs`)
       .then(r => r.json())
       .then(setCreditPacks)
+      .catch(() => {});
+    fetch(`${API_BASE}/api/referrals/me`, { credentials: "include" })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => d && setReferralData(d))
       .catch(() => {});
   }, []);
 
@@ -295,23 +308,28 @@ export default function Dashboard() {
 
         {/* Main tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="mb-6 bg-card border border-border">
-            <TabsTrigger value="roasts" className="gap-2 data-[state=active]:bg-primary/10 data-[state=active]:text-primary">
-              <BarChart3 className="w-4 h-4" /> Your Roasts
-              {completedReports.length > 0 && (
-                <Badge variant="secondary" className="ml-1 text-xs h-4 px-1.5">{completedReports.length}</Badge>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="credits" className="gap-2 data-[state=active]:bg-primary/10 data-[state=active]:text-primary">
-              <img src="/coin.svg" alt="" className="w-4 h-4" /> Credits
-            </TabsTrigger>
-            <TabsTrigger value="subscription" className="gap-2 data-[state=active]:bg-primary/10 data-[state=active]:text-primary">
-              <Sparkles className="w-4 h-4" /> Subscription
-            </TabsTrigger>
-            <TabsTrigger value="account" className="gap-2 data-[state=active]:bg-primary/10 data-[state=active]:text-primary">
-              <CreditCard className="w-4 h-4" /> Account
-            </TabsTrigger>
-          </TabsList>
+          <div className="overflow-x-auto -mx-4 px-4 mb-6">
+            <TabsList className="bg-card border border-border w-max min-w-full">
+              <TabsTrigger value="roasts" className="gap-1.5 data-[state=active]:bg-primary/10 data-[state=active]:text-primary text-xs sm:text-sm">
+                <BarChart3 className="w-3.5 h-3.5" /> <span className="hidden xs:inline">Your </span>Roasts
+                {completedReports.length > 0 && (
+                  <Badge variant="secondary" className="ml-1 text-xs h-4 px-1.5">{completedReports.length}</Badge>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="credits" className="gap-1.5 data-[state=active]:bg-primary/10 data-[state=active]:text-primary text-xs sm:text-sm">
+                <img src="/coin.svg" alt="" className="w-3.5 h-3.5" /> Credits
+              </TabsTrigger>
+              <TabsTrigger value="subscription" className="gap-1.5 data-[state=active]:bg-primary/10 data-[state=active]:text-primary text-xs sm:text-sm">
+                <Sparkles className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Subscription</span><span className="sm:hidden">Pro</span>
+              </TabsTrigger>
+              <TabsTrigger value="referrals" className="gap-1.5 data-[state=active]:bg-primary/10 data-[state=active]:text-primary text-xs sm:text-sm">
+                <Gift className="w-3.5 h-3.5" /> Referrals
+              </TabsTrigger>
+              <TabsTrigger value="account" className="gap-1.5 data-[state=active]:bg-primary/10 data-[state=active]:text-primary text-xs sm:text-sm">
+                <CreditCard className="w-3.5 h-3.5" /> Account
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
           {/* === ROASTS TAB === */}
           <TabsContent value="roasts">
@@ -641,6 +659,111 @@ export default function Dashboard() {
                   Payments are powered by <strong>Polar</strong>. Cancel anytime from your billing portal. No hidden fees.
                 </p>
               </div>
+            </div>
+          </TabsContent>
+
+          {/* === REFERRALS TAB === */}
+          <TabsContent value="referrals">
+            <div className="max-w-2xl">
+              <div className="mb-8">
+                <h2 className="text-2xl font-black tracking-tight mb-1">Referral Program</h2>
+                <p className="text-muted-foreground text-sm">Share Brostique and both you and your friends get free credits.</p>
+              </div>
+
+              {referralData ? (
+                <div className="space-y-4">
+                  {/* Stats */}
+                  <div className="grid grid-cols-3 gap-4">
+                    {[
+                      { label: "Friends Referred", value: referralData.referredCount, icon: <Trophy className="w-4 h-4 text-amber-400" /> },
+                      { label: "Credits Earned", value: referralData.referralCreditsEarned, icon: <Gift className="w-4 h-4 text-primary" /> },
+                      { label: "Credits Per Referral", value: referralData.creditsPerReferral, icon: <img src="/coin.svg" alt="" className="w-4 h-4" /> },
+                    ].map((s, i) => (
+                      <Card key={i} className="border-border">
+                        <CardContent className="p-4">
+                          <div className="flex items-center gap-2 mb-1">{s.icon}<span className="text-xs text-muted-foreground">{s.label}</span></div>
+                          <div className="text-2xl font-black">{s.value}</div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+
+                  {/* Referral link */}
+                  <Card className="border-primary/20 bg-primary/5">
+                    <CardContent className="p-6">
+                      <h3 className="font-bold mb-1">Your Referral Link</h3>
+                      <p className="text-xs text-muted-foreground mb-4">Share this link. When someone signs up with it, you both get {referralData.creditsPerReferral} free credits.</p>
+                      <div className="flex gap-2">
+                        <div className="flex-1 bg-background border border-border rounded-xl px-3 py-2 text-sm font-mono truncate text-muted-foreground">
+                          {referralData.referralLink}
+                        </div>
+                        <Button size="sm" variant="outline" className="gap-2 shrink-0 rounded-xl" onClick={() => {
+                          navigator.clipboard.writeText(referralData.referralLink);
+                          toast({ title: "Link copied!", description: "Share it with friends." });
+                        }}>
+                          <Copy className="w-3.5 h-3.5" /> Copy
+                        </Button>
+                      </div>
+                      <div className="mt-3 flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">Your code:</span>
+                        <code className="text-xs font-black text-primary bg-primary/10 border border-primary/20 rounded-lg px-2 py-0.5">{referralData.referralCode}</code>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Apply referral code */}
+                  <Card className="border-border">
+                    <CardContent className="p-6">
+                      <h3 className="font-bold mb-1">Have a referral code?</h3>
+                      <p className="text-xs text-muted-foreground mb-4">Enter a friend's code to get {referralData.creditsPerReferral} bonus credits.</p>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          placeholder="Enter code (e.g. A1B2C3D4)"
+                          value={referralCodeInput}
+                          onChange={e => setReferralCodeInput(e.target.value.toUpperCase())}
+                          className="flex-1 bg-background border border-border rounded-xl px-3 py-2 text-sm font-mono uppercase placeholder:normal-case placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                        />
+                        <Button
+                          size="sm"
+                          disabled={applyingCode || !referralCodeInput.trim()}
+                          className="shrink-0 rounded-xl"
+                          onClick={async () => {
+                            setApplyingCode(true);
+                            try {
+                              const res = await fetch(`${API_BASE}/api/referrals/apply`, {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                credentials: "include",
+                                body: JSON.stringify({ code: referralCodeInput }),
+                              });
+                              const d = await res.json() as { success?: boolean; message?: string; error?: string };
+                              if (!res.ok) throw new Error(d.error ?? "Failed");
+                              toast({ title: "Code applied!", description: d.message ?? `${referralData.creditsPerReferral} credits added!` });
+                              refetchUser();
+                              refetchStats();
+                              fetch(`${API_BASE}/api/referrals/me`, { credentials: "include" })
+                                .then(r => r.json()).then(setReferralData).catch(() => {});
+                              setReferralCodeInput("");
+                            } catch (err) {
+                              toast({ title: "Error", description: (err as Error).message, variant: "destructive" });
+                            } finally {
+                              setApplyingCode(false);
+                            }
+                          }}
+                        >
+                          {applyingCode ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Apply"}
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center py-16 text-muted-foreground">
+                  <Loader2 className="w-6 h-6 animate-spin mb-3 text-primary" />
+                  <p className="text-sm">Loading referral info...</p>
+                </div>
+              )}
             </div>
           </TabsContent>
 

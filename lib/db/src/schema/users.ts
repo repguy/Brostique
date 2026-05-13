@@ -12,6 +12,9 @@ export const usersTable = pgTable("users", {
   credits: integer("credits").notNull().default(3),
   dailyRoastsUsed: integer("daily_roasts_used").notNull().default(0),
   dailyRoastsResetAt: timestamp("daily_roasts_reset_at", { withTimezone: true }),
+  referralCode: text("referral_code").unique(),
+  referredBy: text("referred_by"),
+  referralCreditsEarned: integer("referral_credits_earned").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

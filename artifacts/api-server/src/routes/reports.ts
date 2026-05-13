@@ -361,4 +361,42 @@ router.post("/reports/:id/share", requireAuth, async (req, res): Promise<void> =
   res.json(ShareReportResponse.parse({ shareSlug, shareUrl }));
 });
 
+// GET /reports/:id/history — before/after comparison for same URL
+router.get("/reports/:id/history", requireAuth, async (req, res): Promise<void> => {
+  const clerkUserId = (req as AuthedRequest).clerkUserId;
+  const reportId = parseInt(req.params.id, 10);
+  if (isNaN(reportId)) { res.status(400).json({ error: "Invalid ID" }); return; }
+
+  const [current] = await db
+    .select()
+    .from(reportsTable)
+    .where(and(eq(reportsTable.id, reportId), eq(reportsTable.userId, clerkUserId)));
+
+  if (!current) { res.status(404).json({ error: "Report not found" }); return; }
+
+  // Find earlier roasts for the same URL (by same user, completed, earlier date)
+  const history = await db
+    .select({
+      id: reportsTable.id,
+      overallScore: reportsTable.overallScore,
+      createdAt: reportsTable.createdAt,
+      status: reportsTable.status,
+    })
+    .from(reportsTable)
+    .where(and(
+      eq(reportsTable.userId, clerkUserId),
+      eq(reportsTable.url, current.url),
+      eq(reportsTable.status, "completed"),
+    ))
+    .orderBy(desc(reportsTable.createdAt))
+    .limit(10);
+
+  res.json(history.map(h => ({
+    id: h.id,
+    overallScore: h.overallScore,
+    createdAt: h.createdAt.toISOString(),
+    isCurrent: h.id === reportId,
+  })));
+});
+
 export default router;

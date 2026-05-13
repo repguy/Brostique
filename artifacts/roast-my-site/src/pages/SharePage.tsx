@@ -1,11 +1,13 @@
 import { useParams, Link } from "wouter";
-import { AlertCircle, Flame, ArrowRight } from "lucide-react";
+import { AlertCircle, Flame, ArrowRight, Lock } from "lucide-react";
 import { useGetPublicReport, getGetPublicReportQueryKey } from "@workspace/api-client-react";
+import { useUser } from "@clerk/react";
 import { Button } from "@/components/ui/button";
 import ReportView from "@/components/ReportView";
 
 export default function SharePage() {
   const { shareSlug } = useParams<{ shareSlug: string }>();
+  const { isSignedIn } = useUser();
 
   const { data: report, isLoading, error } = useGetPublicReport(shareSlug || "", {
     query: {
@@ -85,6 +87,29 @@ export default function SharePage() {
 
       <main>
         <ReportView report={report} isShared={true} />
+        {/* Paywall overlay for non-signed-in users — blurred lower content */}
+        {!isSignedIn && (
+          <div className="relative">
+            <div className="h-48 bg-gradient-to-b from-transparent to-background/95 -mt-48 relative z-10 pointer-events-none" />
+            <div className="bg-background/98 border-t border-border py-16 text-center px-4 relative z-20">
+              <div className="max-w-md mx-auto">
+                <div className="w-14 h-14 bg-primary/10 border border-primary/25 rounded-2xl flex items-center justify-center mx-auto mb-5">
+                  <Lock className="w-7 h-7 text-primary" />
+                </div>
+                <h2 className="text-2xl font-black mb-2">Want the full breakdown?</h2>
+                <p className="text-muted-foreground text-sm mb-6 leading-relaxed">
+                  Sign up free to see the complete AI analysis, score categories, quick wins, and rewritten copy — plus get 3 free roasts of your own site.
+                </p>
+                <Link href="/sign-up">
+                  <Button size="lg" className="rounded-2xl px-8 shadow-[0_0_24px_rgba(255,87,34,0.35)] hover:shadow-[0_0_40px_rgba(255,87,34,0.5)] transition-shadow">
+                    Get Full Access Free <ArrowRight className="w-4 h-4 ml-1.5" />
+                  </Button>
+                </Link>
+                <p className="text-xs text-muted-foreground mt-4">No credit card required · 3 free roasts instantly</p>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
 
       {/* CTA footer for shared page */}

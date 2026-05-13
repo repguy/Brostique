@@ -1,10 +1,43 @@
-import { useRef } from "react";
+import { useRef, useEffect, useState } from "react";
 import { Link } from "wouter";
-import { Shield, Zap, Target, ArrowRight, Share2, Flame, Star, TrendingUp, MousePointerClick, Sparkles } from "lucide-react";
+import { Shield, Zap, Target, ArrowRight, Share2, Flame, Star, TrendingUp, MousePointerClick, Sparkles, Trophy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import URLInput from "@/components/URLInput";
 import { useGetBillingPlans, useCreateCheckoutSession } from "@workspace/api-client-react";
 import { motion, useInView } from "framer-motion";
+
+const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+function useLiveCounter() {
+  const [count, setCount] = useState<number | null>(null);
+  useEffect(() => {
+    fetch(`${API_BASE}/api/stats/public`)
+      .then(r => r.json())
+      .then(d => setCount(d.totalRoasts ?? 0))
+      .catch(() => {});
+  }, []);
+  return count;
+}
+
+function AnimatedCounter({ target }: { target: number }) {
+  const [display, setDisplay] = useState(0);
+  const ref = useRef(null);
+  const inView = useInView(ref, { once: true });
+  useEffect(() => {
+    if (!inView || target === 0) return;
+    const duration = 1200;
+    const steps = 50;
+    const stepTime = duration / steps;
+    let current = 0;
+    const timer = setInterval(() => {
+      current += target / steps;
+      if (current >= target) { setDisplay(target); clearInterval(timer); }
+      else setDisplay(Math.floor(current));
+    }, stepTime);
+    return () => clearInterval(timer);
+  }, [inView, target]);
+  return <span ref={ref}>{display.toLocaleString()}</span>;
+}
 
 const fadeUp = {
   hidden: { opacity: 0, y: 28 },
@@ -64,6 +97,7 @@ const FEATURES = [
 export default function LandingPage() {
   const { data: plans } = useGetBillingPlans();
   const createCheckoutSession = useCreateCheckoutSession();
+  const liveCount = useLiveCounter();
   const featuresRef = useRef(null);
   const featuresInView = useInView(featuresRef, { once: true, margin: "-80px" });
   const socialRef = useRef(null);
@@ -71,8 +105,15 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen bg-background text-foreground selection:bg-primary/30 overflow-x-hidden">
+      {/* Urgency Banner */}
+      <div className="w-full bg-gradient-to-r from-primary/80 via-orange-500/80 to-primary/80 py-2 px-4 text-center text-xs font-semibold text-white relative z-[60]">
+        <span className="inline-flex items-center gap-2">
+          🔥 Limited time: 3 free roasts for every new account. No card required.
+          <Link href="/sign-up" className="underline underline-offset-2 hover:no-underline font-bold">Start free →</Link>
+        </span>
+      </div>
       {/* Navbar */}
-      <header className="fixed top-0 w-full z-50 glass">
+      <header className="fixed top-8 w-full z-50 glass">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-primary/20 border border-primary/30 flex items-center justify-center shadow-[0_0_12px_rgba(255,87,34,0.3)]">
@@ -84,6 +125,8 @@ export default function LandingPage() {
             <a href="#features" className="hover:text-foreground transition-colors">Features</a>
             <a href="#pricing" className="hover:text-foreground transition-colors">Pricing</a>
             <a href="#love" className="hover:text-foreground transition-colors">Reviews</a>
+            <Link href="/leaderboard" className="hover:text-foreground transition-colors">Leaderboard</Link>
+            <Link href="/docs" className="hover:text-foreground transition-colors">Docs</Link>
           </nav>
           <div className="flex items-center gap-3">
             <Link href="/sign-in" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors hidden sm:inline">
@@ -116,10 +159,18 @@ export default function LandingPage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-              className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary/10 border border-primary/25 text-sm font-semibold text-primary mb-8 shadow-[0_0_20px_rgba(255,87,34,0.12)]"
+              className="flex flex-wrap items-center justify-center gap-3 mb-8"
             >
-              <Sparkles className="w-3.5 h-3.5" />
-              AI-powered conversion roasting — 3 free credits
+              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary/10 border border-primary/25 text-sm font-semibold text-primary shadow-[0_0_20px_rgba(255,87,34,0.12)]">
+                <Sparkles className="w-3.5 h-3.5" />
+                AI-powered conversion roasting — 3 free credits
+              </div>
+              {liveCount !== null && liveCount > 0 && (
+                <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-sm font-semibold text-emerald-400">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  <AnimatedCounter target={liveCount} /> sites roasted
+                </div>
+              )}
             </motion.div>
 
             <motion.h1
@@ -422,6 +473,8 @@ export default function LandingPage() {
           </div>
           <p className="text-xs text-muted-foreground">© {new Date().getFullYear()} Brostique. Made with fire and zero filter.</p>
           <div className="flex gap-4 text-xs text-muted-foreground">
+            <Link href="/leaderboard" className="hover:text-foreground transition-colors flex items-center gap-1"><Trophy className="w-3 h-3" />Leaderboard</Link>
+            <Link href="/docs" className="hover:text-foreground transition-colors">Docs</Link>
             <Link href="/sign-in" className="hover:text-foreground transition-colors">Sign in</Link>
             <Link href="/sign-up" className="hover:text-foreground transition-colors">Sign up</Link>
           </div>

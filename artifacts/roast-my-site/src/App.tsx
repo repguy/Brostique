@@ -11,6 +11,8 @@ import Dashboard from "@/pages/Dashboard";
 import ReportPage from "@/pages/ReportPage";
 import SharePage from "@/pages/SharePage";
 import AdminPage from "@/pages/AdminPage";
+import LeaderboardPage from "@/pages/LeaderboardPage";
+import DocsPage from "@/pages/DocsPage";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient();
@@ -172,6 +174,8 @@ function ClerkProviderWithRoutes() {
             <Route path="/report/:id" component={ReportPage} />
             <Route path="/share/:shareSlug" component={SharePage} />
             <Route path="/admin" component={AdminPage} />
+            <Route path="/leaderboard" component={LeaderboardPage} />
+            <Route path="/docs" component={DocsPage} />
             <Route component={NotFound} />
           </Switch>
           <Toaster />

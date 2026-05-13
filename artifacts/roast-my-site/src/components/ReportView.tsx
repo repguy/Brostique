@@ -3,13 +3,15 @@ import { format } from "date-fns";
 import {
   Share2, Heart, ExternalLink, ShieldAlert, Info, Lightbulb, Flame,
   TrendingUp, AlertTriangle, CheckCircle2, Copy, Zap, Target, Sparkles,
-  Bot, ChevronDown, ChevronUp, BarChart3
+  Bot, ChevronDown, ChevronUp, BarChart3, Twitter, Download, Mail, Lock
 } from "lucide-react";
 import { useToggleFavoriteReport, useShareReport } from "@workspace/api-client-react";
 import type { Report } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
+
+const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 interface ReportViewProps {
   report: Report;
@@ -302,6 +304,9 @@ export default function ReportView({ report, isShared = false }: ReportViewProps
   const [stateIndex, setStateIndex] = useState(0);
   const [promptExpanded, setPromptExpanded] = useState(false);
   const [promptCopied, setPromptCopied] = useState(false);
+  const [emailSending, setEmailSending] = useState(false);
+  const [pdfExporting, setPdfExporting] = useState(false);
+  const reportRef = useRef<HTMLDivElement>(null);
 
   const isPending = report.status === 'pending' || report.status === 'processing';
 
@@ -338,6 +343,69 @@ export default function ReportView({ report, isShared = false }: ReportViewProps
     setPromptCopied(true);
     toast({ title: "Prompt copied!", description: "Paste it into ChatGPT, Claude, or Cursor." });
     setTimeout(() => setPromptCopied(false), 2500);
+  };
+
+  const handleTweet = () => {
+    const score = report.overallScore ? Math.round(report.overallScore) : 0;
+    const url = report.shareSlug
+      ? `${window.location.origin}/share/${report.shareSlug}`
+      : window.location.href;
+    const domain = report.url.replace(/^https?:\/\//, "").split("/")[0];
+    const text = `Just roasted ${domain} with @Brostique — it scored ${score}/100. ${score < 40 ? "Ouch. 🔥" : score < 70 ? "Needs work. ⚠️" : "Solid! ✅"} Check the full breakdown:`;
+    window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`, "_blank");
+  };
+
+  const handlePdfExport = async () => {
+    if (pdfExporting) return;
+    setPdfExporting(true);
+    toast({ title: "Generating PDF...", description: "This may take a few seconds." });
+    try {
+      const html2canvas = (await import("html2canvas")).default;
+      const jsPDF = (await import("jspdf")).default;
+      const el = reportRef.current;
+      if (!el) throw new Error("No element");
+      const canvas = await html2canvas(el, { scale: 1.5, useCORS: true, backgroundColor: "#0a0a0f" });
+      const imgData = canvas.toDataURL("image/jpeg", 0.85);
+      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+      const pageW = pdf.internal.pageSize.getWidth();
+      const pageH = pdf.internal.pageSize.getHeight();
+      const imgH = (canvas.height * pageW) / canvas.width;
+      let y = 0;
+      while (y < imgH) {
+        if (y > 0) pdf.addPage();
+        pdf.addImage(imgData, "JPEG", 0, -y, pageW, imgH);
+        y += pageH;
+      }
+      const domain = report.url.replace(/^https?:\/\//, "").split("/")[0].replace(/\./g, "-");
+      pdf.save(`brostique-roast-${domain}.pdf`);
+      toast({ title: "PDF saved!", description: "Your report has been downloaded." });
+    } catch (err) {
+      toast({ title: "PDF export failed", description: "Please try again.", variant: "destructive" });
+    } finally {
+      setPdfExporting(false);
+    }
+  };
+
+  const handleSendEmail = async () => {
+    if (emailSending || isShared) return;
+    setEmailSending(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/reports/${report.id}/email`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({})) as { error?: string };
+        throw new Error(d.error ?? "Failed");
+      }
+      const d = await res.json() as { sentTo?: string };
+      toast({ title: "Report emailed!", description: `Sent to ${d.sentTo ?? "your email"}.` });
+    } catch (err) {
+      toast({ title: "Email failed", description: (err as Error).message || "Could not send email.", variant: "destructive" });
+    } finally {
+      setEmailSending(false);
+    }
   };
 
   if (report.status === 'failed') {
@@ -401,17 +469,17 @@ export default function ReportView({ report, isShared = false }: ReportViewProps
   const promptPreview = aiPrompt.slice(0, 400) + "...";
 
   return (
-    <div className="pb-24">
+    <div className="pb-24" ref={reportRef}>
       {/* Hero */}
       <section className="bg-card/60 border-b border-border py-12 relative overflow-hidden">
         <div className="absolute inset-0 pointer-events-none">
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[400px] bg-primary/6 rounded-full blur-[120px]" />
         </div>
         <div className="container mx-auto px-4 max-w-5xl relative z-10">
-          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-6 mb-10">
-            <div className="min-w-0 flex-1">
+          <div className="flex flex-col gap-5 mb-8">
+            <div className="min-w-0">
               <div className="flex items-center gap-2 mb-1.5">
-                <h1 className="text-2xl md:text-3xl font-black truncate">{report.pageTitle || 'Untitled Page'}</h1>
+                <h1 className="text-xl sm:text-2xl md:text-3xl font-black truncate">{report.pageTitle || 'Untitled Page'}</h1>
                 <a href={report.url} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-primary transition-colors shrink-0">
                   <ExternalLink className="w-4 h-4" />
                 </a>
@@ -419,17 +487,28 @@ export default function ReportView({ report, isShared = false }: ReportViewProps
               <p className="text-muted-foreground font-mono text-sm">{report.url.replace(/^https?:\/\//, '')}</p>
               <p className="text-xs text-muted-foreground/60 mt-1">{format(new Date(report.createdAt), 'MMMM d, yyyy · h:mm a')}</p>
             </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <Button variant="outline" size="sm" onClick={handleShare} className="gap-2 rounded-xl bg-background">
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button variant="outline" size="sm" onClick={handleShare} className="gap-1.5 rounded-xl bg-background h-8 px-3 text-xs">
                 <Share2 className="w-3.5 h-3.5" /> Share
               </Button>
+              <Button variant="outline" size="sm" onClick={handleTweet} className="gap-1.5 rounded-xl bg-background text-sky-400 border-sky-500/30 hover:bg-sky-500/10 h-8 px-3 text-xs">
+                <Twitter className="w-3.5 h-3.5" /> Tweet
+              </Button>
               {!isShared && (
-                <Button variant="outline" size="sm" onClick={handleToggleFav}
-                  className={`gap-2 rounded-xl bg-background ${report.isFavorite ? 'border-primary text-primary' : ''}`}
-                >
-                  <Heart className="w-3.5 h-3.5" fill={report.isFavorite ? "currentColor" : "none"} />
-                  {report.isFavorite ? 'Saved' : 'Save'}
-                </Button>
+                <>
+                  <Button variant="outline" size="sm" onClick={handlePdfExport} disabled={pdfExporting} className="gap-1.5 rounded-xl bg-background h-8 px-3 text-xs">
+                    <Download className="w-3.5 h-3.5" /> {pdfExporting ? "Exporting…" : "PDF"}
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={handleSendEmail} disabled={emailSending} className="gap-1.5 rounded-xl bg-background h-8 px-3 text-xs">
+                    <Mail className="w-3.5 h-3.5" /> {emailSending ? "Sending…" : "Email"}
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={handleToggleFav}
+                    className={`gap-1.5 rounded-xl bg-background h-8 px-3 text-xs ${report.isFavorite ? 'border-primary text-primary' : ''}`}
+                  >
+                    <Heart className="w-3.5 h-3.5" fill={report.isFavorite ? "currentColor" : "none"} />
+                    {report.isFavorite ? 'Saved' : 'Save'}
+                  </Button>
+                </>
               )}
             </div>
           </div>

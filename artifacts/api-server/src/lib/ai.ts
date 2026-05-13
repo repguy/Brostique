@@ -1,10 +1,36 @@
 import OpenAI from "openai";
 import { logger } from "./logger";
+import { getSetting } from "./settings";
 
-const openai = new OpenAI({
-  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-});
+function getOpenAIClient(): OpenAI {
+  return new OpenAI({
+    baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+    apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+  });
+}
+
+function getOpenRouterClient(): OpenAI {
+  return new OpenAI({
+    baseURL: "https://openrouter.ai/api/v1",
+    apiKey: process.env.OPENROUTER_API_KEY ?? "",
+    defaultHeaders: {
+      "HTTP-Referer": "https://roastmysite.app",
+      "X-Title": "RoastMySite",
+    },
+  });
+}
+
+async function getAIClient(): Promise<{ client: OpenAI; model: string }> {
+  const provider = await getSetting("ai_provider");
+  const useOpenRouter = provider === "openrouter" && !!process.env.OPENROUTER_API_KEY;
+
+  if (useOpenRouter) {
+    const model = await getSetting("openrouter_model");
+    return { client: getOpenRouterClient(), model: model || "meta-llama/llama-3.3-70b-instruct:free" };
+  }
+
+  return { client: getOpenAIClient(), model: "gpt-4.1-mini" };
+}
 
 export interface ExtractedPageData {
   url: string;
@@ -44,14 +70,13 @@ export interface RoastResult {
 }
 
 export async function extractPageData(url: string): Promise<ExtractedPageData> {
-  // Use OpenAI to simulate extraction based on the URL for now
-  // In production this would use Puppeteer/Playwright
   logger.info({ url }, "Extracting page data");
+  const { client, model } = await getAIClient();
 
   try {
-    const response = await openai.chat.completions.create({
-      model: "gpt-5-mini",
-      max_completion_tokens: 1024,
+    const response = await client.chat.completions.create({
+      model,
+      max_tokens: 1024,
       messages: [
         {
           role: "system",
@@ -99,6 +124,7 @@ Return only valid JSON, no markdown.`,
 
 export async function generateRoast(data: ExtractedPageData): Promise<RoastResult> {
   logger.info({ url: data.url }, "Generating AI roast");
+  const { client, model } = await getAIClient();
 
   const prompt = `You are a brutally honest but genuinely helpful conversion rate optimization expert and copywriter. You have 15 years of experience helping SaaS companies and startups fix their landing pages.
 
@@ -131,38 +157,14 @@ Return a JSON object with EXACTLY this structure (no markdown, pure JSON):
   "firstImpression": "<2-3 sentences describing the immediate gut reaction a visitor gets — be vivid and honest>",
   "roastSummary": "<3-4 sentence overall verdict — direct, honest, with the most critical issue named>",
   "sections": [
-    {
-      "title": "Biggest Conversion Killer",
-      "content": "<specific, actionable critique — what's broken and exactly why it hurts conversions>",
-      "severity": "critical"
-    },
-    {
-      "title": "Copywriting Analysis",
-      "content": "<detailed copywriting critique — is the message clear? does it speak to the right person? is there jargon?>",
-      "severity": "critical"
-    },
-    {
-      "title": "CTA Analysis",
-      "content": "<critique of calls to action — are they visible, compelling, specific? do they create urgency?>",
-      "severity": "warning"
-    },
-    {
-      "title": "Trust Signal Analysis",
-      "content": "<what trust signals are missing or weak? social proof, testimonials, security badges, logos?>",
-      "severity": "warning"
-    },
-    {
-      "title": "SEO Basics",
-      "content": "<title tag, meta description, heading structure, keyword targeting critique>",
-      "severity": "info"
-    },
-    {
-      "title": "What's Actually Working",
-      "content": "<genuine positives — be honest, not empty praise. what is this site doing well?>",
-      "severity": "info"
-    }
+    {"title": "Biggest Conversion Killer", "content": "<specific, actionable critique>", "severity": "critical"},
+    {"title": "Copywriting Analysis", "content": "<detailed copywriting critique>", "severity": "critical"},
+    {"title": "CTA Analysis", "content": "<critique of calls to action>", "severity": "warning"},
+    {"title": "Trust Signal Analysis", "content": "<what trust signals are missing or weak>", "severity": "warning"},
+    {"title": "SEO Basics", "content": "<title tag, meta description, heading structure critique>", "severity": "info"},
+    {"title": "What's Actually Working", "content": "<genuine positives>", "severity": "info"}
   ],
-  "rewrittenHeadline": "<a dramatically better headline that is specific, benefit-driven, and speaks to the target user's pain>",
+  "rewrittenHeadline": "<a dramatically better headline that is specific, benefit-driven, speaks to the target user's pain>",
   "rewrittenCta": "<a better CTA button text that is specific and action-oriented>",
   "quickWins": [
     "<specific actionable fix 1 that can be done this week>",
@@ -173,26 +175,19 @@ Return a JSON object with EXACTLY this structure (no markdown, pure JSON):
   ]
 }`;
 
-  const response = await openai.chat.completions.create({
-    model: "gpt-5.4",
-    max_completion_tokens: 4096,
+  const response = await client.chat.completions.create({
+    model,
+    max_tokens: 4096,
     messages: [
       {
         role: "system",
-        content: "You are a world-class conversion rate optimization expert. You give brutally honest, specific, actionable feedback. You never give generic advice. You always name the specific problem and the specific fix. Return only valid JSON.",
+        content: "You are a world-class conversion rate optimization expert. You give brutally honest, specific, actionable feedback. Return only valid JSON.",
       },
-      {
-        role: "user",
-        content: prompt,
-      },
+      { role: "user", content: prompt },
     ],
   });
 
   const content = response.choices[0]?.message?.content ?? "";
-
-  // Clean up any markdown code blocks
   const cleaned = content.replace(/^```json\n?/, "").replace(/\n?```$/, "").trim();
-  const result = JSON.parse(cleaned) as RoastResult;
-
-  return result;
+  return JSON.parse(cleaned) as RoastResult;
 }

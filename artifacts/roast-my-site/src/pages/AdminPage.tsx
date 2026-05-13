@@ -41,10 +41,14 @@ interface AdminUser {
   createdAt: string;
 }
 
-async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
+async function apiFetch<T>(path: string, token: string | null, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}/api${path}`, {
     ...options,
-    headers: { "Content-Type": "application/json", ...options?.headers },
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...options?.headers,
+    },
     credentials: "include",
   });
   if (!res.ok) {
@@ -115,10 +119,11 @@ export default function AdminPage() {
   async function load() {
     setLoading(true);
     try {
+      const token = await getToken();
       const [s, cfg, u] = await Promise.all([
-        apiFetch<AdminStats>("/admin/stats"),
-        apiFetch<AdminSettings>("/admin/settings"),
-        apiFetch<AdminUser[]>("/admin/users"),
+        apiFetch<AdminStats>("/admin/stats", token),
+        apiFetch<AdminSettings>("/admin/settings", token),
+        apiFetch<AdminUser[]>("/admin/users", token),
       ]);
       setStats(s);
       setSettings(cfg);
@@ -141,7 +146,8 @@ export default function AdminPage() {
   async function handleSave() {
     setSaving(true);
     try {
-      const updated = await apiFetch<AdminSettings>("/admin/settings", { method: "PUT", body: JSON.stringify(form) });
+      const token = await getToken();
+      const updated = await apiFetch<AdminSettings>("/admin/settings", token, { method: "PUT", body: JSON.stringify(form) });
       setSettings(updated);
       toast({ title: "Settings saved", description: "Configuration updated." });
     } catch (e) {
@@ -160,15 +166,17 @@ export default function AdminPage() {
     }
     setGrantLoading(true);
     try {
+      const token = await getToken();
       const result = await apiFetch<{ clerkId: string; credits: number; added: number }>(
         `/admin/users/${encodeURIComponent(grantClerkId.trim())}/credits`,
+        token,
         { method: "POST", body: JSON.stringify({ amount }) }
       );
       toast({ title: "Credits granted!", description: `${result.added} credits added. ${result.clerkId} now has ${result.credits} credits.` });
       setGrantClerkId("");
       setGrantAmount("5");
       // Refresh users list
-      const u = await apiFetch<AdminUser[]>("/admin/users");
+      const u = await apiFetch<AdminUser[]>("/admin/users", token);
       setUsers(u);
     } catch (e) {
       toast({ title: "Failed to grant credits", description: (e as Error).message, variant: "destructive" });

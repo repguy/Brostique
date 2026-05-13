@@ -181,13 +181,38 @@ Return a JSON object with EXACTLY this structure (no markdown, pure JSON):
     messages: [
       {
         role: "system",
-        content: "You are a world-class conversion rate optimization expert. You give brutally honest, specific, actionable feedback. Return only valid JSON.",
+        content: "You are a world-class conversion rate optimization expert. You give brutally honest, specific, actionable feedback. Return only valid JSON, no markdown, no code blocks.",
       },
       { role: "user", content: prompt },
     ],
   });
 
   const content = response.choices[0]?.message?.content ?? "";
-  const cleaned = content.replace(/^```json\n?/, "").replace(/\n?```$/, "").trim();
-  return JSON.parse(cleaned) as RoastResult;
+
+  // Robustly extract JSON from the response, handling various wrapping styles
+  function extractJson(raw: string): string {
+    const stripped = raw.trim();
+    // Try stripping markdown code block with any lang tag
+    const codeBlock = stripped.match(/^```(?:\w+)?\s*\n?([\s\S]*?)\n?```$/);
+    if (codeBlock) return codeBlock[1].trim();
+    // Find the first { ... } block
+    const firstBrace = stripped.indexOf("{");
+    const lastBrace = stripped.lastIndexOf("}");
+    if (firstBrace !== -1 && lastBrace > firstBrace) {
+      return stripped.slice(firstBrace, lastBrace + 1);
+    }
+    return stripped;
+  }
+
+  const cleaned = extractJson(content);
+
+  let parsed: RoastResult;
+  try {
+    parsed = JSON.parse(cleaned) as RoastResult;
+  } catch {
+    logger.error({ content: content.slice(0, 500) }, "Failed to parse AI roast JSON");
+    throw new Error("AI returned malformed JSON. Please try again.");
+  }
+
+  return parsed;
 }

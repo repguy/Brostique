@@ -147,14 +147,14 @@ function ClerkProviderWithRoutes() {
       localization={{
         signIn: {
           start: {
-            title: "Welcome to RoastMySite",
-            subtitle: "Sign in to access your reports",
+            title: "Welcome to Brostique",
+            subtitle: "Sign in to access your roasts",
           },
         },
         signUp: {
           start: {
-            title: "Start Roasting",
-            subtitle: "Create an account to analyze your site",
+            title: "Start Roasting for Free",
+            subtitle: "3 free credits. No card required.",
           },
         },
       }}

@@ -1,12 +1,15 @@
 import { useState, useEffect, useRef } from "react";
 import { format } from "date-fns";
-import { Share2, Heart, ExternalLink, ShieldAlert, Loader2, Info, Lightbulb, Flame, TrendingUp, AlertTriangle, CheckCircle2, Copy, Zap, Target } from "lucide-react";
+import {
+  Share2, Heart, ExternalLink, ShieldAlert, Info, Lightbulb, Flame,
+  TrendingUp, AlertTriangle, CheckCircle2, Copy, Zap, Target, Sparkles,
+  Bot, ChevronDown, ChevronUp, BarChart3
+} from "lucide-react";
 import { useToggleFavoriteReport, useShareReport } from "@workspace/api-client-react";
 import type { Report } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { motion, useInView, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 
 interface ReportViewProps {
   report: Report;
@@ -36,11 +39,38 @@ function getScoreLabel(score: number | null | undefined) {
   return "On Fire 🔥";
 }
 
+function getBarColor(pct: number) {
+  if (pct >= 70) return "bg-emerald-500";
+  if (pct >= 40) return "bg-orange-500";
+  return "bg-red-500";
+}
+
+function getBarGlow(pct: number) {
+  if (pct >= 70) return "shadow-[0_0_8px_rgba(16,185,129,0.5)]";
+  if (pct >= 40) return "shadow-[0_0_8px_rgba(249,115,22,0.5)]";
+  return "shadow-[0_0_8px_rgba(239,68,68,0.5)]";
+}
+
 function getSeverityConfig(severity: string | null | undefined) {
   switch (severity) {
-    case 'critical': return { color: 'text-red-400', bg: 'bg-red-500/10 border-red-500/30', badgeClass: 'bg-red-500/15 text-red-400 border-red-500/30', icon: <AlertTriangle className="w-4 h-4 text-red-400" /> };
-    case 'warning': return { color: 'text-orange-400', bg: 'bg-orange-500/10 border-orange-500/30', badgeClass: 'bg-orange-500/15 text-orange-400 border-orange-500/30', icon: <Zap className="w-4 h-4 text-orange-400" /> };
-    default: return { color: 'text-blue-400', bg: 'bg-blue-500/10 border-blue-500/30', badgeClass: 'bg-blue-500/15 text-blue-400 border-blue-500/30', icon: <Info className="w-4 h-4 text-blue-400" /> };
+    case 'critical': return {
+      color: 'text-red-400', bg: 'bg-red-500/8 border-red-500/25',
+      badgeClass: 'bg-red-500/15 text-red-400 border-red-500/30',
+      icon: <AlertTriangle className="w-4 h-4 text-red-400" />,
+      dotColor: 'bg-red-500',
+    };
+    case 'warning': return {
+      color: 'text-orange-400', bg: 'bg-orange-500/8 border-orange-500/25',
+      badgeClass: 'bg-orange-500/15 text-orange-400 border-orange-500/30',
+      icon: <Zap className="w-4 h-4 text-orange-400" />,
+      dotColor: 'bg-orange-500',
+    };
+    default: return {
+      color: 'text-blue-400', bg: 'bg-blue-500/8 border-blue-500/25',
+      badgeClass: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
+      icon: <Info className="w-4 h-4 text-blue-400" />,
+      dotColor: 'bg-blue-500',
+    };
   }
 }
 
@@ -91,6 +121,170 @@ function AnimatedScore({ target, color }: { target: number; color: string }) {
   );
 }
 
+function useInView(ref: React.RefObject<Element | null>, options: { once?: boolean } = {}) {
+  const [inView, setInView] = useState(false);
+  useEffect(() => {
+    if (!ref.current) return;
+    const obs = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) {
+        setInView(true);
+        if (options.once) obs.disconnect();
+      } else if (!options.once) {
+        setInView(false);
+      }
+    });
+    obs.observe(ref.current);
+    return () => obs.disconnect();
+  }, [ref, options.once]);
+  return inView;
+}
+
+function AnimatedBar({ pct, delay = 0 }: { pct: number; delay?: number }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const inView = useInView(ref as React.RefObject<Element>, { once: true });
+  const [width, setWidth] = useState(0);
+
+  useEffect(() => {
+    if (!inView) return;
+    const t = setTimeout(() => setWidth(pct), delay * 1000 + 100);
+    return () => clearTimeout(t);
+  }, [inView, pct, delay]);
+
+  return (
+    <div ref={ref} className="h-2 bg-muted/30 rounded-full overflow-hidden">
+      <div
+        className={`h-full rounded-full transition-all duration-700 ease-out ${getBarColor(pct)} ${getBarGlow(pct)}`}
+        style={{ width: `${width}%`, transitionDelay: `${delay * 1000}ms` }}
+      />
+    </div>
+  );
+}
+
+function generateAIPrompt(report: Report): string {
+  const url = report.url;
+  const title = report.pageTitle || "Untitled Page";
+  const score = report.overallScore ?? "N/A";
+  const label = getScoreLabel(report.overallScore);
+  const scoreCategories = (report.scoreCategories as any[] | null) ?? [];
+  const sections = (report.sections as any[] | null) ?? [];
+  const quickWins = (report.quickWins as string[] | null) ?? [];
+
+  const criticals = sections.filter((s: any) => s.severity === "critical");
+  const warnings = sections.filter((s: any) => s.severity === "warning");
+  const infos = sections.filter((s: any) => s.severity !== "critical" && s.severity !== "warning");
+
+  let prompt = `You are an expert conversion rate optimization (CRO) specialist and UX designer. I have a landing page that has been professionally analyzed and scored. I need you to help me fix it with specific, implementable changes.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+LANDING PAGE ANALYSIS REPORT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+URL: ${url}
+Page Title: ${title}
+Overall Conversion Score: ${score}/100 — ${label}
+
+`;
+
+  if (report.firstImpression) {
+    prompt += `FIRST 3-SECOND IMPRESSION:
+${report.firstImpression}
+
+`;
+  }
+
+  if (report.roastSummary) {
+    prompt += `OVERALL ROAST SUMMARY:
+${report.roastSummary}
+
+`;
+  }
+
+  if (scoreCategories.length > 0) {
+    prompt += `SCORE BREAKDOWN BY CATEGORY:\n`;
+    scoreCategories.forEach((cat: any) => {
+      const pct = Math.round((cat.score / cat.maxScore) * 100);
+      const bar = "█".repeat(Math.round(pct / 10)) + "░".repeat(10 - Math.round(pct / 10));
+      prompt += `  ${cat.name.padEnd(25)} ${bar} ${cat.score}/${cat.maxScore} (${pct}%)\n`;
+    });
+    prompt += "\n";
+  }
+
+  if (criticals.length > 0) {
+    prompt += `🚨 CRITICAL ISSUES (fix immediately — biggest conversion killers):\n`;
+    criticals.forEach((s: any, i: number) => {
+      prompt += `\n${i + 1}. ${s.title}\n${s.content}\n`;
+    });
+    prompt += "\n";
+  }
+
+  if (warnings.length > 0) {
+    prompt += `⚠️ WARNINGS (high-impact improvements):\n`;
+    warnings.forEach((s: any, i: number) => {
+      prompt += `\n${i + 1}. ${s.title}\n${s.content}\n`;
+    });
+    prompt += "\n";
+  }
+
+  if (infos.length > 0) {
+    prompt += `ℹ️ ADDITIONAL OBSERVATIONS:\n`;
+    infos.forEach((s: any, i: number) => {
+      prompt += `\n${i + 1}. ${s.title}\n${s.content}\n`;
+    });
+    prompt += "\n";
+  }
+
+  if (quickWins.length > 0) {
+    prompt += `✅ QUICK WINS (implement today, no dev required):\n`;
+    quickWins.forEach((win: string, i: number) => {
+      prompt += `${i + 1}. ${win}\n`;
+    });
+    prompt += "\n";
+  }
+
+  if (report.rewrittenHeadline || report.rewrittenCta) {
+    prompt += `AI-SUGGESTED COPY IMPROVEMENTS:\n`;
+    if (report.rewrittenHeadline) {
+      prompt += `  Improved Headline: "${report.rewrittenHeadline}"\n`;
+    }
+    if (report.rewrittenCta) {
+      prompt += `  Stronger CTA: "${report.rewrittenCta}"\n`;
+    }
+    prompt += "\n";
+  }
+
+  prompt += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+YOUR TASK
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Based on the analysis above, provide a complete, actionable improvement plan:
+
+1. REWRITE THE HERO SECTION
+   - New headline (clear value prop, specific, benefit-led)
+   - New subheadline (supports headline, removes objections)
+   - New CTA button copy (action-oriented, low friction)
+   - Above-the-fold layout recommendations
+
+2. FIX ALL CRITICAL ISSUES
+   - For each critical issue listed above, provide the exact fix with example copy or UI change
+
+3. TRUST & SOCIAL PROOF
+   - What trust signals to add and where to place them
+   - Specific copy for testimonials, social proof, or credibility markers
+
+4. CONVERSION FLOW IMPROVEMENTS
+   - Remove friction from the user journey
+   - Optimize the visual hierarchy for the primary CTA
+   - Address the specific score weaknesses identified above
+
+5. COPY REWRITE (if needed)
+   - Rewrite any weak copy sections identified
+   - Ensure messaging matches the visitor's intent and pain points
+
+IMPORTANT: Give me specific, implementable examples — not generic advice. Include exact copy where possible. Format changes clearly so I know exactly what to update in my code or CMS.`;
+
+  return prompt;
+}
+
 const ANALYSIS_STATES = [
   "Capturing screenshot...",
   "Reading your copy...",
@@ -106,6 +300,8 @@ export default function ReportView({ report, isShared = false }: ReportViewProps
   const toggleFav = useToggleFavoriteReport();
   const shareReport = useShareReport();
   const [stateIndex, setStateIndex] = useState(0);
+  const [promptExpanded, setPromptExpanded] = useState(false);
+  const [promptCopied, setPromptCopied] = useState(false);
 
   const isPending = report.status === 'pending' || report.status === 'processing';
 
@@ -134,6 +330,14 @@ export default function ReportView({ report, isShared = false }: ReportViewProps
     toggleFav.mutate({ id: report.id }, {
       onSuccess: (data) => toast({ title: data.isFavorite ? "Saved to favorites" : "Removed from favorites" })
     });
+  };
+
+  const handleCopyPrompt = () => {
+    const prompt = generateAIPrompt(report);
+    navigator.clipboard.writeText(prompt);
+    setPromptCopied(true);
+    toast({ title: "Prompt copied!", description: "Paste it into ChatGPT, Claude, or Cursor." });
+    setTimeout(() => setPromptCopied(false), 2500);
   };
 
   if (report.status === 'failed') {
@@ -189,6 +393,12 @@ export default function ReportView({ report, isShared = false }: ReportViewProps
   const scoreColor = getScoreColor(report.overallScore);
   const scoreGlow = getScoreGlow(report.overallScore);
   const scoreLabel = getScoreLabel(report.overallScore);
+  const scoreCategories = (report.scoreCategories as any[] | null) ?? [];
+  const sections = (report.sections as any[] | null) ?? [];
+  const quickWins = (report.quickWins as string[] | null) ?? [];
+
+  const aiPrompt = generateAIPrompt(report);
+  const promptPreview = aiPrompt.slice(0, 400) + "...";
 
   return (
     <div className="pb-24">
@@ -197,9 +407,7 @@ export default function ReportView({ report, isShared = false }: ReportViewProps
         <div className="absolute inset-0 pointer-events-none">
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[400px] bg-primary/6 rounded-full blur-[120px]" />
         </div>
-
         <div className="container mx-auto px-4 max-w-5xl relative z-10">
-          {/* Header row */}
           <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-6 mb-10">
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 mb-1.5">
@@ -211,7 +419,6 @@ export default function ReportView({ report, isShared = false }: ReportViewProps
               <p className="text-muted-foreground font-mono text-sm">{report.url.replace(/^https?:\/\//, '')}</p>
               <p className="text-xs text-muted-foreground/60 mt-1">{format(new Date(report.createdAt), 'MMMM d, yyyy · h:mm a')}</p>
             </div>
-
             <div className="flex items-center gap-2 shrink-0">
               <Button variant="outline" size="sm" onClick={handleShare} className="gap-2 rounded-xl bg-background">
                 <Share2 className="w-3.5 h-3.5" /> Share
@@ -227,17 +434,13 @@ export default function ReportView({ report, isShared = false }: ReportViewProps
             </div>
           </div>
 
-          {/* Score + Summary */}
           <div className="grid md:grid-cols-[220px_1fr] gap-8 items-center">
-            {/* Score circle */}
             <div className="flex flex-col items-center">
               <div className={`relative w-44 h-44 md:w-52 md:h-52 rounded-full bg-background flex items-center justify-center ${scoreGlow}`}>
                 <AnimatedScore target={report.overallScore ?? 0} color={scoreColor} />
               </div>
               <div className={`mt-3 text-sm font-bold ${scoreColor}`}>{scoreLabel}</div>
             </div>
-
-            {/* Summary */}
             <div className="relative bg-background border border-border/60 rounded-3xl p-6 md:p-8">
               <div className="absolute -top-3.5 left-6 bg-primary px-3 py-1 rounded-full flex items-center gap-1.5 shadow-[0_0_15px_rgba(255,87,34,0.4)]">
                 <Flame className="w-3.5 h-3.5 text-primary-foreground" />
@@ -251,39 +454,37 @@ export default function ReportView({ report, isShared = false }: ReportViewProps
         </div>
       </section>
 
-      {/* Scores breakdown */}
-      {(report.scoreCategories && report.scoreCategories.length > 0) && (
-        <section className="border-b border-border bg-card/20 py-10">
+      {/* Score Breakdown — full-width bar chart */}
+      {scoreCategories.length > 0 && (
+        <section className="border-b border-border bg-card/30 py-10">
           <div className="container mx-auto px-4 max-w-5xl">
-            <h2 className="text-lg font-black mb-6 flex items-center gap-2.5">
-              <TrendingUp className="w-5 h-5 text-primary" /> Score Breakdown
+            <h2 className="text-lg font-black mb-8 flex items-center gap-2.5">
+              <BarChart3 className="w-5 h-5 text-primary" /> Score Breakdown
             </h2>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {report.scoreCategories.map((cat: any, i: number) => {
-                const pct = (cat.score / cat.maxScore) * 100;
+            <div className="grid sm:grid-cols-2 gap-x-12 gap-y-5">
+              {scoreCategories.map((cat: any, i: number) => {
+                const pct = Math.round((cat.score / cat.maxScore) * 100);
                 const c = getScoreColor(pct);
                 return (
                   <motion.div
                     key={i}
-                    initial={{ opacity: 0, y: 10 }}
-                    whileInView={{ opacity: 1, y: 0 }}
+                    initial={{ opacity: 0, x: -10 }}
+                    whileInView={{ opacity: 1, x: 0 }}
                     viewport={{ once: true }}
-                    transition={{ delay: i * 0.05, duration: 0.4 }}
-                    className="bg-card border border-border rounded-2xl p-4"
+                    transition={{ delay: i * 0.06, duration: 0.4 }}
                   >
-                    <div className="text-xs text-muted-foreground mb-2 font-medium">{cat.name}</div>
-                    <div className="flex items-end justify-between">
-                      <span className={`text-2xl font-black ${c}`}>{cat.score}</span>
-                      <span className="text-xs text-muted-foreground mb-0.5">/{cat.maxScore}</span>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-semibold text-foreground/80">{cat.name}</span>
+                      <div className="flex items-baseline gap-1">
+                        <span className={`text-xl font-black tabular-nums ${c}`}>{cat.score}</span>
+                        <span className="text-xs text-muted-foreground">/{cat.maxScore}</span>
+                      </div>
                     </div>
-                    <div className="mt-2.5 h-1.5 bg-muted/40 rounded-full overflow-hidden">
-                      <motion.div
-                        className={`h-full rounded-full ${pct >= 70 ? 'bg-emerald-500' : pct >= 40 ? 'bg-orange-500' : 'bg-red-500'}`}
-                        initial={{ width: 0 }}
-                        whileInView={{ width: `${pct}%` }}
-                        viewport={{ once: true }}
-                        transition={{ delay: 0.2 + i * 0.05, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-                      />
+                    <AnimatedBar pct={pct} delay={i * 0.06} />
+                    <div className="mt-1 flex justify-between">
+                      <span className="text-[10px] text-muted-foreground/50">0</span>
+                      <span className={`text-[10px] font-semibold ${c}`}>{pct}%</span>
+                      <span className="text-[10px] text-muted-foreground/50">{cat.maxScore}</span>
                     </div>
                   </motion.div>
                 );
@@ -298,19 +499,18 @@ export default function ReportView({ report, isShared = false }: ReportViewProps
         <div className="grid md:grid-cols-[1fr_340px] gap-10">
 
           {/* Left: Analysis sections */}
-          <div className="space-y-6">
+          <div className="space-y-5">
             <h2 className="text-xl font-black flex items-center gap-2.5">
               <AlertTriangle className="w-5 h-5 text-primary" /> Deep Dive Analysis
             </h2>
 
-            {/* First impression */}
             {report.firstImpression && (
               <motion.div
                 initial={{ opacity: 0, y: 16 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true, margin: "-40px" }}
                 transition={{ duration: 0.5 }}
-                className="border border-blue-500/30 bg-blue-500/5 rounded-2xl p-6"
+                className="border border-blue-500/25 bg-blue-500/5 rounded-2xl p-6"
               >
                 <div className="flex items-center gap-3 mb-4">
                   <div className="w-9 h-9 rounded-xl bg-blue-500/20 flex items-center justify-center shrink-0">
@@ -325,8 +525,7 @@ export default function ReportView({ report, isShared = false }: ReportViewProps
               </motion.div>
             )}
 
-            {/* Sections */}
-            {(report.sections || []).map((section: any, i: number) => {
+            {sections.map((section: any, i: number) => {
               const sev = getSeverityConfig(section.severity);
               return (
                 <motion.div
@@ -334,10 +533,11 @@ export default function ReportView({ report, isShared = false }: ReportViewProps
                   initial={{ opacity: 0, y: 16 }}
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true, margin: "-40px" }}
-                  transition={{ delay: i * 0.07, duration: 0.5 }}
-                  className={`border rounded-2xl p-6 ${sev.bg}`}
+                  transition={{ delay: i * 0.06, duration: 0.5 }}
+                  className={`border rounded-2xl p-6 relative overflow-hidden ${sev.bg}`}
                 >
-                  <div className="flex items-start justify-between gap-4 mb-4">
+                  <div className={`absolute top-0 left-0 w-1 h-full rounded-l-2xl ${sev.dotColor}`} />
+                  <div className="flex items-start justify-between gap-4 mb-4 pl-2">
                     <div className="flex items-center gap-3">
                       <div className="w-9 h-9 rounded-xl bg-background/60 flex items-center justify-center shrink-0">
                         {sev.icon}
@@ -350,14 +550,14 @@ export default function ReportView({ report, isShared = false }: ReportViewProps
                       </span>
                     )}
                   </div>
-                  <p className="text-muted-foreground leading-relaxed whitespace-pre-wrap text-sm">{section.content}</p>
+                  <p className="text-muted-foreground leading-relaxed whitespace-pre-wrap text-sm pl-2">{section.content}</p>
                 </motion.div>
               );
             })}
           </div>
 
           {/* Right: Sidebar */}
-          <div className="space-y-6">
+          <div className="space-y-5">
             {/* AI Rewrites */}
             {(report.rewrittenHeadline || report.rewrittenCta) && (
               <motion.div
@@ -371,7 +571,6 @@ export default function ReportView({ report, isShared = false }: ReportViewProps
                 <h2 className="text-base font-black mb-5 flex items-center gap-2 text-primary">
                   <Lightbulb className="w-4 h-4" /> AI Rewrites
                 </h2>
-
                 {report.rewrittenHeadline && (
                   <div className="mb-5">
                     <p className="text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground mb-2.5">Improved Headline</p>
@@ -386,7 +585,6 @@ export default function ReportView({ report, isShared = false }: ReportViewProps
                     </div>
                   </div>
                 )}
-
                 {report.rewrittenCta && (
                   <div>
                     <p className="text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground mb-2.5">Stronger CTA</p>
@@ -405,7 +603,7 @@ export default function ReportView({ report, isShared = false }: ReportViewProps
             )}
 
             {/* Quick Wins */}
-            {report.quickWins && report.quickWins.length > 0 && (
+            {quickWins.length > 0 && (
               <motion.div
                 initial={{ opacity: 0, x: 20 }}
                 whileInView={{ opacity: 1, x: 0 }}
@@ -417,10 +615,10 @@ export default function ReportView({ report, isShared = false }: ReportViewProps
                   <CheckCircle2 className="w-4 h-4 text-emerald-500" /> Quick Wins
                 </h2>
                 <ul className="space-y-3">
-                  {report.quickWins.map((win: string, i: number) => (
+                  {quickWins.map((win: string, i: number) => (
                     <li key={i} className="flex items-start gap-3">
                       <div className="mt-0.5 w-5 h-5 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center shrink-0">
-                        <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                        <span className="text-[9px] font-black text-emerald-400">{i + 1}</span>
                       </div>
                       <span className="text-sm text-muted-foreground leading-relaxed">{win}</span>
                     </li>
@@ -463,6 +661,119 @@ export default function ReportView({ report, isShared = false }: ReportViewProps
             </motion.div>
           </div>
         </div>
+      </div>
+
+      {/* AI Improvement Prompt — Full Width */}
+      <div className="container mx-auto px-4 max-w-5xl pb-8">
+        <motion.div
+          initial={{ opacity: 0, y: 24 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-60px" }}
+          transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+          className="relative rounded-3xl border border-violet-500/30 bg-gradient-to-br from-violet-500/8 via-background to-background overflow-hidden"
+        >
+          {/* Glow */}
+          <div className="absolute top-0 left-0 w-[500px] h-[300px] bg-violet-500/10 rounded-full blur-[100px] pointer-events-none" />
+          <div className="absolute bottom-0 right-0 w-[300px] h-[200px] bg-purple-500/8 rounded-full blur-[80px] pointer-events-none" />
+
+          <div className="relative z-10 p-6 md:p-8">
+            {/* Header */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-violet-500/20 border border-violet-500/30 flex items-center justify-center shadow-[0_0_20px_rgba(139,92,246,0.25)]">
+                  <Bot className="w-6 h-6 text-violet-400" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <h2 className="text-xl font-black">AI Fix-It Prompt</h2>
+                    <span className="px-2 py-0.5 rounded-full bg-violet-500/20 border border-violet-500/30 text-[10px] font-black text-violet-400 uppercase tracking-widest">New</span>
+                  </div>
+                  <p className="text-sm text-muted-foreground">Paste this into ChatGPT, Claude, Cursor, or Lovable to get your site fixed by AI</p>
+                </div>
+              </div>
+              <Button
+                onClick={handleCopyPrompt}
+                className={`gap-2 rounded-xl shrink-0 transition-all ${promptCopied ? 'bg-emerald-600 hover:bg-emerald-600 shadow-[0_0_20px_rgba(16,185,129,0.4)]' : 'bg-violet-600 hover:bg-violet-700 shadow-[0_0_20px_rgba(139,92,246,0.35)]'}`}
+              >
+                {promptCopied ? (
+                  <><CheckCircle2 className="w-4 h-4" /> Copied!</>
+                ) : (
+                  <><Copy className="w-4 h-4" /> Copy Prompt</>
+                )}
+              </Button>
+            </div>
+
+            {/* What it covers */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+              {[
+                { icon: <Target className="w-3.5 h-3.5 text-violet-400" />, label: `${sections.filter((s: any) => s.severity === 'critical').length} Critical Issues` },
+                { icon: <Zap className="w-3.5 h-3.5 text-orange-400" />, label: `${quickWins.length} Quick Wins` },
+                { icon: <BarChart3 className="w-3.5 h-3.5 text-blue-400" />, label: `${scoreCategories.length} Score Categories` },
+                { icon: <Sparkles className="w-3.5 h-3.5 text-emerald-400" />, label: "Copy Rewrites" },
+              ].map((item, i) => (
+                <div key={i} className="flex items-center gap-2 bg-background/60 border border-border/60 rounded-xl px-3 py-2.5">
+                  {item.icon}
+                  <span className="text-xs font-semibold text-muted-foreground">{item.label}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Prompt preview */}
+            <div className="relative bg-background/70 border border-border/60 rounded-2xl overflow-hidden">
+              <div className="flex items-center gap-2 px-4 py-3 border-b border-border/60 bg-muted/20">
+                <div className="flex gap-1.5">
+                  <div className="w-2.5 h-2.5 rounded-full bg-red-500/60" />
+                  <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/60" />
+                  <div className="w-2.5 h-2.5 rounded-full bg-emerald-500/60" />
+                </div>
+                <span className="text-xs text-muted-foreground font-mono ml-2">ai-improvement-prompt.txt</span>
+                <div className="ml-auto flex items-center gap-1.5">
+                  <span className="text-[10px] text-muted-foreground/60">{aiPrompt.split('\n').length} lines · {Math.round(aiPrompt.length / 4)} tokens</span>
+                </div>
+              </div>
+
+              <AnimatePresence initial={false}>
+                <div className={`relative overflow-hidden transition-all duration-500 ${promptExpanded ? '' : 'max-h-48'}`}>
+                  <pre className="p-4 text-xs text-muted-foreground font-mono leading-relaxed whitespace-pre-wrap break-words">
+                    {promptExpanded ? aiPrompt : promptPreview}
+                  </pre>
+                  {!promptExpanded && (
+                    <div className="absolute bottom-0 inset-x-0 h-16 bg-gradient-to-t from-background/90 to-transparent" />
+                  )}
+                </div>
+              </AnimatePresence>
+
+              <button
+                onClick={() => setPromptExpanded(!promptExpanded)}
+                className="flex items-center justify-center gap-2 w-full py-3 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors border-t border-border/60 bg-muted/10 hover:bg-muted/20"
+              >
+                {promptExpanded ? (
+                  <><ChevronUp className="w-3.5 h-3.5" /> Collapse</>
+                ) : (
+                  <><ChevronDown className="w-3.5 h-3.5" /> Show full prompt ({Math.ceil(aiPrompt.length / 250)} pages)</>
+                )}
+              </button>
+            </div>
+
+            {/* How to use */}
+            <div className="mt-5 flex flex-wrap gap-3">
+              {[
+                { name: "ChatGPT", color: "text-emerald-400 bg-emerald-500/10 border-emerald-500/25" },
+                { name: "Claude", color: "text-orange-400 bg-orange-500/10 border-orange-500/25" },
+                { name: "Cursor", color: "text-blue-400 bg-blue-500/10 border-blue-500/25" },
+                { name: "Lovable", color: "text-pink-400 bg-pink-500/10 border-pink-500/25" },
+                { name: "Bolt", color: "text-violet-400 bg-violet-500/10 border-violet-500/25" },
+              ].map((tool) => (
+                <span key={tool.name} className={`px-3 py-1 rounded-full text-xs font-semibold border ${tool.color}`}>
+                  {tool.name}
+                </span>
+              ))}
+              <span className="px-3 py-1 rounded-full text-xs font-semibold border border-border text-muted-foreground">
+                or any AI assistant
+              </span>
+            </div>
+          </div>
+        </motion.div>
       </div>
     </div>
   );

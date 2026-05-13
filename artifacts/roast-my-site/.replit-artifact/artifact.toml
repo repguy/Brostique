@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "RoastMySite"
+version = "1.0.0"
+id = "artifacts/roast-my-site"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 24668
+
+[services.development]
+run = "pnpm --filter @workspace/roast-my-site run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/roast-my-site", "run", "build" ]
+publicDir = "artifacts/roast-my-site/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "24668"
+BASE_PATH = "/"
